@@ -1,0 +1,100 @@
+---
+kind: Camera
+name: Campito
+address: 192.168.254.15:80
+schema:
+  hikvision:
+    digest-auth: admin:petecus00
+    channel: 102
+resize: 800,600
+areas:
+  - name: main
+    poly-points:
+      - 0,165
+      - 368,141
+      - 799,201
+      - 799,599
+      - 0,599
+---
+kind: Camera
+name: Frente-I
+address: 192.168.254.8:80
+schema:
+  hikvision:
+    digest-auth: admin:petecus00
+    channel: 102
+resize: 800,600
+areas:
+  - name: main
+    poly-points:
+      - 0,493
+      - 465,210
+      - 799,298
+      - 799,599
+      - 0,599
+---
+kind: Camera
+name: Frente-D
+address: 192.168.254.12:80
+schema:
+  hikvision:
+    digest-auth: admin:petecus00
+    channel: 102
+resize: 800,600
+areas:
+  - name: main
+    poly-points:
+      - 160,599
+      - 23,240
+      - 210,148
+      - 420,120
+      - 799,320
+      - 799,599
+---
+kind: Camera
+name: Puerta-F
+address: 192.168.254.4:80
+schema:
+  hikvision:
+    digest-auth: admin:petecus00
+    channel: 102
+resize: 800,600
+areas:
+  - name: main
+    poly-points:
+      - 0,0
+      - 0,599
+      - 799,599
+      - 799,0
+---
+kind: Camera
+name: Pasillo
+address: 192.168.254.7:80
+schema:
+  hikvision:
+    digest-auth: admin:petecus00
+    channel: 102
+resize: 800,600
+areas:
+  - name: main
+    poly-points:
+      - 0,0
+      - 0,599
+      - 799,599
+      - 799,0
+---
+kind: Camera
+name: Fondo
+address: 192.168.254.5:80
+schema:
+  hikvision:
+    digest-auth: admin:petecus00
+    channel: 102
+resize: 800,600
+areas:
+  - name: main
+    poly-points:
+      - 0,0
+      - 0,599
+      - 799,599
+      - 799,0     
