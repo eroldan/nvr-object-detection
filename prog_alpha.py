@@ -7,7 +7,6 @@ import yaml
 import collision
 
 
-
 CAMERA_CONFIG = 'camera-config.yaml'
 STATUS_PERIOD_TIME = 5
 
