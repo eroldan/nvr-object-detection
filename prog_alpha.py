@@ -7,25 +7,33 @@ import yaml
 import collision
 
 
+
+CAMERA_CONFIG = 'camera-config.yaml'
+STATUS_PERIOD_TIME = 5
+
 INTERESTING_OBJECTS = ('person')
 #INTERESTING_OBJECTS = ('person', 'dog', 'cat')
 DETECTION_THRESHOLD = 0.9
-FRAME_QUEUE_SIZE = 2
-FRAME_THREAD_COUNT = 2
-TMPDPATH = './corpus/'
 DETECTEDPATH = './detected'
-DETECT_THREADCOUNT= 1
-DETECT_IMG_FORMAT = 'jpg'
-STATUS_PERIOD_TIME = 1
-FONT_NAME='consolab.ttf'
+FRAME_QUEUE_SIZE = 8
+FRAME_THREAD_COUNT = 12
+TMPDPATH = '/run/user/1000/temp'
+DETECT_THREADCOUNT = 2
+FONT_FILE='/usr/share/fonts/truetype/freefont/FreeMono.ttf'
 FONT_SIZE=25
 RECTANGLE_WIDTH=4
-CAMERA_CONFIG = 'camera-config.yaml'
 
 class Camera:
     def __init__(self, cconfig):
         self.cconfig = cconfig
         if 'hikvision' in cconfig['schema']:
+            self.schema = self.cconfig['schema']['hikvision']
+            self.address = self.cconfig['address']
+            self.resize = [ int(x) for x in self.cconfig['resize'].split(',') ]
+            self.channel = self.schema['channel']
+            self.digest_auth = self.schema['digest-auth']
+            self.img_format = self.schema['img-format']
+           
             self.get_img = self.hikvision_get_img
 
     def get_img(self):
@@ -33,15 +41,11 @@ class Camera:
         sys.exit(1)
 
     def hikvision_get_img(self):
-        address = self.cconfig['address']
-        resize = [ int(x) for x in self.cconfig['resize'].split(',') ]
-        channel = self.cconfig['schema']['hikvision']['channel']
-        digest_auth = self.cconfig['schema']['hikvision']['digest-auth']
-        fname = os.path.join(TMPDPATH, "{}-{}.jpg".format(channel, str(time.time())))
-        url = 'http://{}/ISAPI/Streaming/channels/{}/picture'.format(address, channel)
-        print("pull {}".format(url))
-        img = PIL.Image.open(io.BytesIO(requests.get(url=url, timeout=5, auth=HTTPBasicAuth(*digest_auth.split(':'))).content))
-        img.thumbnail(resize, resample=PIL.Image.NEAREST)
+        fname = os.path.join(TMPDPATH, "{}-{}.{}".format(self.channel, str(time.time()), self.img_format))
+        url = 'http://{}/ISAPI/Streaming/channels/{}/picture'.format(self.address, self.channel)
+        #print("pull {}".format(url))
+        img = PIL.Image.open(io.BytesIO(requests.get(url=url, timeout=5, auth=HTTPBasicAuth(*self.digest_auth.split(':'))).content))
+        img.thumbnail(self.resize)
         img.save(fname)
         return fname, img
         
@@ -80,13 +84,12 @@ class detect_thread(threading.Thread):
     def run(self):
         print("Thread {} starting".format(self.name))
         global global_detections_counter, stop
-        v = collision.Vector
 
         while not stop:
             try:
                 fname, img, camera = nvr_queue.get(timeout=1)
             except queue.Empty:
-                print("Image buffer is empty, !")
+                print("Image buffer is empty!")
                 continue
                 
             nvr_queue.task_done()         
@@ -94,40 +97,45 @@ class detect_thread(threading.Thread):
             os.unlink(fname)
             global_detections_counter += 1 
             detected = [x for x in detected if x[0] in INTERESTING_OBJECTS]
-            #font = PIL.ImageFont.truetype(FONT_NAME, FONT_SIZE)
             #detected = [('Fake', 1, (100, 100, 50, 50))]
             if detected:
-                print(detected)
-                draw = PIL.ImageDraw.Draw(img)
+                detection(detected, img, camera)
 
-                for a in camera.cconfig['areas']:
-                    apolys = [ (int(x), int(y)) for (x, y) in [ line.split(',') for line in a['poly-points'] ]]
-                    draw.polygon( apolys, outline='LawnGreen')
-                    for obj, confidence, (center_x, center_y, width, height) in detected:
-                        dcolor = 'yellow'
-                        darea = collision.Concave_Poly(v(0,0), [ v(x, y) for (x, y) in apolys ])
-                        dobj = collision.Concave_Poly(v(0,0), [ v(center_x - width/2, center_y - height/2),
-                                                                v(center_x - width/2, center_y + height/2),
-                                                                v(center_x + width/2, center_y + height/2),
-                                                                v(center_x + width/2, center_y - height/2)
-                                                              ]
-                                                    )
-                        if collision.collide(dobj, darea):
-                            dcolor = 'fuchsia'
-                        draw.rectangle(xy=(center_x - width/2, center_y - height/2,
-                                           center_x + width/2, center_y + height/2),
-                                    outline=dcolor,
-                                    width=RECTANGLE_WIDTH
-                                    )
-            #       draw.text(xy=((center_x - width/2), (center_y - height/2) - FONT_SIZE),
-            #                     text="{}({})".format(obj, int(confidence * 100)),
-            #                     fill='fuchsia',
-            #                     font=font,
-            #                     stroke_fill='pink',
-            #                     stroke_width=1
-            #                     )
-                img.save(os.path.join(DETECTEDPATH, '{}.{}'.format(time.time(), DETECT_IMG_FORMAT)))
         print("Thread {} stoping".format(self.name))
+
+
+def detection(detected, img, camera):
+    print(detected)
+    v = collision.Vector
+    font = PIL.ImageFont.truetype(FONT_FILE, FONT_SIZE)
+    draw = PIL.ImageDraw.Draw(img)
+
+    for a in camera.cconfig['areas']:
+        apolys = [ (int(x), int(y)) for (x, y) in [ line.split(',') for line in a['poly-points'] ]]
+        draw.polygon( apolys, outline='LawnGreen')
+        for obj, confidence, (center_x, center_y, width, height) in detected:
+            dcolor = 'yellow'
+            darea = collision.Concave_Poly(v(0,0), [ v(x, y) for (x, y) in apolys ])
+            dobj = collision.Concave_Poly(v(0,0), [ v(center_x - width/2, center_y - height/2),
+                                                    v(center_x - width/2, center_y + height/2),
+                                                    v(center_x + width/2, center_y + height/2),
+                                                    v(center_x + width/2, center_y - height/2)
+                                                  ]
+                                          )
+            if collision.collide(dobj, darea):
+                dcolor = 'fuchsia'
+                draw.rectangle(xy=(center_x - width/2, center_y - height/2,
+                                   center_x + width/2, center_y + height/2),
+                                   outline=dcolor,
+                                   width=RECTANGLE_WIDTH)
+                draw.text(xy=((center_x - width/2), (center_y - height/2) - FONT_SIZE),
+                                 text="{}({})".format(obj, int(confidence * 100)),
+                                 fill=dcolor,
+                                 font=font,
+                                 stroke_width=1,
+                                 stroke_fill='white'
+                                 )
+                img.save(os.path.join(DETECTEDPATH, '{}.{}'.format(time.time(), camera.img_format)))
 
             
 class camera_iterator():
@@ -184,7 +192,7 @@ def main():
     try:
         while True:
             time.sleep(STATUS_PERIOD_TIME)
-            print("FPS: {}, QSIZE: {}".format(global_detections_counter/STATUS_PERIOD_TIME, nvr_queue.qsize()))
+            print("FPS: {}, QSIZE: {}".format(global_detections_counter/float(STATUS_PERIOD_TIME), nvr_queue.qsize()))
             global_detections_counter = 0
     except KeyboardInterrupt as e:
         stop = True
